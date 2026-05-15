@@ -63,7 +63,7 @@ def ejecutar_pipeline():
         if indice > 1 and (indice - 1) % 3 == 0:
             time.sleep(random.uniform(20.0, 35.0))
 
-        time.sleep(random.uniform(6.0, 12.0))
+        time.sleep(random.uniform(10.0, 18.0))
         productos_pagina = extraer_portatiles(pagina)
         
         if productos_pagina:
