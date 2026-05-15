@@ -1,3 +1,4 @@
+import os
 import sys
 import psycopg2
 from src.scraper import extraer_portatiles
@@ -6,26 +7,36 @@ import time
 import random
 
 def asegurar_base_de_datos_existe():
-    # Nos conectamos a la BD por defecto ('postgres') para poder crear la nueva
-    conexion = psycopg2.connect(
-        host="localhost", port=5432, user="postgres", password="datos", dbname="postgres"
-    )
-    # En PostgreSQL, la creación de BD no puede ejecutarse dentro de una transacción activa
-    conexion.set_isolation_level(psycopg2.extensions.ISOLATION_LEVEL_AUTOCOMMIT)
-    cursor = conexion.cursor()
-    
-    # Comprobamos si ya existe la BD 'pccomponentes'
-    cursor.execute("SELECT 1 FROM pg_catalog.pg_database WHERE datname = 'pccomponentes';")
-    existe = cursor.fetchone()
-    
-    if not existe:
-        cursor.execute("CREATE DATABASE pccomponentes;")
-        print("💾 Base de datos 'pccomponentes' creada desde cero.")
-    else:
-        print("🔍 Base de datos 'pccomponentes' ya existía.")
+    """Se conecta a la BD inicial para asegurar la infraestructura tanto en Local como Cloud."""
+    try:
+        # Usamos 'postgres' como base de datos por defecto para el chequeo inicial
+        conexion = psycopg2.connect(
+            host=os.environ.get("DB_HOST", "localhost"),
+            port=int(os.environ.get("DB_PORT", 5432)),
+            user=os.environ.get("DB_USER", "postgres"),
+            password=os.environ.get("DB_PASSWORD", "datos"),
+            dbname="postgres" 
+        )
+        conexion.set_isolation_level(psycopg2.extensions.ISOLATION_LEVEL_AUTOCOMMIT)
+        cursor = conexion.cursor()
         
-    cursor.close()
-    conexion.close()
+        # Leemos qué Base de Datos toca verificar (pccomponentes en local, postgres en Supabase)
+        bd_objetivo = os.environ.get("DB_NAME", "pccomponentes")
+        
+        cursor.execute(f"SELECT 1 FROM pg_catalog.pg_database WHERE datname = '{bd_objetivo}';")
+        existe = cursor.fetchone()
+        
+        if not existe:
+            cursor.execute(f"CREATE DATABASE {bd_objetivo};")
+            print(f" Base de datos '{bd_objetivo}' creada con éxito.")
+        else:
+            print(f" La base de datos '{bd_objetivo}' ya existe. Continuando...")
+            
+        cursor.close()
+        conexion.close()
+    except Exception as e:
+        print(f" Error crítico de infraestructura: {e}")
+        sys.exit(1)
 
 def ejecutar_pipeline():
     print("\n=========================================")
