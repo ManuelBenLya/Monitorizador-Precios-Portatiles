@@ -56,9 +56,17 @@ def ejecutar_pipeline():
 
     for pagina in range(1, 87):
         #Para evitar DDOS
-        espera = random.uniform(1.5, 3.5) # Elige un número aleatorio entre 1.5 y 3.5 segundos
+        # 1. Descanso largo estratégico cada 3 páginas para engañar al firewall
+        if pagina > 1 and (pagina - 1) % 3 == 0:
+            descanso_largo = random.uniform(15.0, 25.0)
+            print(f"\n [Descanso] Tomando un descanso largo de {round(descanso_largo, 2)} segundos para camuflar el bot...")
+            time.sleep(descanso_largo)
+
+        # 2. Retardo normal aleatorio entre páginas
+        espera = random.uniform(4.0, 8.0) # Subimos el rango para ser más humanos
         print(f" Esperando {round(espera, 2)} segundos para no saturar el servidor...")
         time.sleep(espera)
+
         productos_pagina = extraer_portatiles(pagina)
         
         if productos_pagina:
