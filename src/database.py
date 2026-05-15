@@ -1,5 +1,6 @@
 import pandas as pd
 import psycopg2
+import streamlit as st
 from psycopg2.extras import execute_values
 import os
 
@@ -100,18 +101,21 @@ def guardar_datos(lista_productos):
         cursor.close()
         conexion.close()
 
+# ... mantén tus funciones de conectar_db, crear_tablas y guardar_datos igual ...
 
+@st.cache_data(ttl=600) 
 def obtener_datos_dashboard():
-    """Conecta a la BD y devuelve un DataFrame con el histórico de precios."""
+    """Conecta a la BD y devuelve un DataFrame con el histórico de precios optimizado."""
     conexion = conectar_db()
     
-    # Esta consulta une las tres tablas para tener toda la info en una sola vista
+    # Hemos optimizado la consulta para asegurarnos de que el dashboard reciba las columnas
+    # que espera tu archivo visual (sku, nombre, url, marca, precio, fecha_extraccion)
     query = """
         SELECT 
             p.sku, 
             p.nombre, 
             p.url, 
-            m.nombre as marca, 
+            m.nombre AS marca, 
             h.precio, 
             h.fecha_extraccion
         FROM productos p
@@ -123,4 +127,10 @@ def obtener_datos_dashboard():
     # Pandas nos permite transformar una consulta SQL directamente en un DataFrame
     df = pd.read_sql_query(query, conexion)
     conexion.close()
+    
+    # Forzamos a que la columna de fecha sea de tipo datetime de Pandas
+    # Esto es vital para que los gráficos temporales de Plotly no se vuelvan locos
+    if not df.empty:
+        df['fecha_extraccion'] = pd.to_datetime(df['fecha_extraccion'])
+        
     return df

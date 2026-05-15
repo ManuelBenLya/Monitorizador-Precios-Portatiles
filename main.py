@@ -78,7 +78,7 @@ def ejecutar_pipeline():
     intentos_maximos = 2  # Para no quedarnos en un bucle infinito si nos banean del todo
     intento_actual = 1
 
-    while paginas_fallidas and intento_actual <= intent_maximos:
+    while paginas_fallidas and intento_actual <= intentos_maximos:
         print(f"\n🔄 [REINTENTOS] Iniciando ronda {intento_actual} de páginas fallidas...")
         print(f"⏳ Esperando 60 segundos de reloj para enfriar la IP por completo...")
         time.sleep(60) # Descanso profundo vital antes de volver a la carga
@@ -95,15 +95,15 @@ def ejecutar_pipeline():
             productos_pagina = extraer_portatiles(pagina)
             if productos_pagina:
                 todos_los_productos.extend(productos_pagina)
-                print(f"    -> 🔥 ¡REINTENTO EXITOSO! Conseguida página {pagina} ({len(productos_pagina)} productos).")
+                print(f"    ->  ¡REINTENTO EXITOSO! Conseguida página {pagina} ({len(productos_pagina)} productos).")
             else:
-                print(f"    -> ❌ Sigue dando 403 la página {pagina}.")
+                print(f"    ->  Sigue dando 403 la página {pagina}.")
                 paginas_fallidas.append(pagina) # Se queda para la ronda 2 si queda margen
                 
         intento_actual += 1
 
     print(f"\n Extracción finalizada. Total acumulado en Supabase: {len(todos_los_productos)} portátiles.")
-   # PASO 3: Carga (Almacenamiento e historial de precios)
+    # PASO 3: Carga (Almacenamiento e historial de precios)
     print("\n[3/3] Guardando productos e histórico de precios en PostgreSQL...")
     guardar_datos(todos_los_productos)
     

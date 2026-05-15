@@ -2,18 +2,29 @@ import streamlit as st
 import pandas as pd
 import plotly.express as px
 from src.database import obtener_datos_dashboard
+from dotenv import load_dotenv  # 👈 Dejas esto para que lea tu archivo .env
+
+load_dotenv()
 
 # Configuración de la página web
 st.set_page_config(page_title="Radar de Precios - PcComponentes", page_icon="💻", layout="wide")
 
-st.title(" Radar de Precios de Portátiles")
+st.title(" 💻 Radar de Precios de Portátiles")
 st.markdown("Dashboard de ingeniería de datos para el seguimiento de precios en tiempo real.")
 
 # 1. Extracción de datos desde PostgreSQL
 try:
-    df = obtener_datos_dashboard() # Si renombraste la función, usa el nombre exacto
-except:
-    # Por si acaso estás probando sin la BD llena, metemos datos de prueba (Mock Data)
+    # 🏁 Intento A: Intentamos conectarnos a tu Supabase real
+    df = obtener_datos_dashboard() 
+    
+    if df.empty:
+        st.warning("⚠️ Conectado a Supabase, pero las tablas no devuelven registros. ¿Corriste el scraper?")
+except Exception as e:
+    # 🕵️‍♂️ Si falla el Intento A, te chiva el error en la barra lateral para que sepas qué pasa...
+    st.sidebar.error(f"❌ Error de conexión a Supabase: {e}")
+    st.sidebar.warning("🔄 Cargando entorno de demostración con datos locales.")
+    
+    #  Plan B: Datos de prueba por si falla la nube
     df = pd.DataFrame({
         'sku': ['101', '101', '102', '102'],
         'nombre': ['MSI Cyborg 15', 'MSI Cyborg 15', 'ASUS Vivobook', 'ASUS Vivobook'],
@@ -37,7 +48,12 @@ with col1:
 with col2:
     st.metric("Precio Medio", f"{round(df_filtrado['precio'].mean(), 2)} €")
 with col3:
-    st.metric("Descuento Máximo Registrado", f"{df_filtrado['precio'].max() - df_filtrado['precio'].min()} €")
+    # Mostramos la última fecha disponible en el dataset para saber de cuándo son los datos
+    if not df_filtrado.empty:
+        ultima_fecha = df_filtrado['fecha_extraccion'].max().strftime('%d/%m/%Y')
+        st.metric("Última Actualización", ultima_fecha)
+    else:
+        st.metric("Última Actualización", "Sin datos")
 
 st.markdown("---")
 
@@ -52,7 +68,6 @@ with col_graf1:
 
 with col_graf2:
     st.subheader("Evolución Temporal de Precios")
-    # Filtro dinámico para elegir un portátil específico y ver su gráfica de línea
     portatil_elegido = st.selectbox("Elige un modelo para ver su histórico:", df_filtrado['nombre'].unique())
     df_temporal = df_filtrado[df_filtrado['nombre'] == portatil_elegido]
     
@@ -63,5 +78,5 @@ with col_graf2:
 st.markdown("---")
 
 # 5. Vista de los Datos Crudos
-st.subheader(" Inventario de Datos en Tiempo Real")
+st.subheader(" 📋 Inventario de Datos en Tiempo Real")
 st.dataframe(df_filtrado, use_container_width=True)
