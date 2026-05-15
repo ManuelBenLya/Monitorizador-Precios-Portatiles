@@ -15,25 +15,30 @@ def extraer_portatiles(pagina):
     print(f"Conectando a PcComponentes: (pagina {pagina}) {url}...")
 
     try:
-        # Petición limpia con el motor antibots
         scraper = cloudscraper.create_scraper()
         respuesta = scraper.get(url, headers=headers, timeout=15)
         
         if respuesta.status_code != 200:
-            print(f"  Error de conexión: {respuesta.status_code}")
+            print(f" Error de conexión: {respuesta.status_code}")
             return []
 
+        # Forzamos a que interprete el texto usando UTF-8 puro para evitar caracteres rotos
+        respuesta.encoding = 'utf-8'
+        
         soup = BeautifulSoup(respuesta.text, 'html.parser')
         
-        # [OPTIMIZADO] Buscamos la etiqueta por id ignorando cualquier otra propiedad de React
+        # Buscamos el script usando un selector flexible por ID
         script_datos = soup.find('script', attrs={"id": "microdata-product-list-script"})
         
         if not script_datos or not script_datos.string:
-            print(f"  No se localizó el bloque JSON Schema en la página {pagina}.")
+            print(f" No se encontró la etiqueta de datos en la página {pagina}.")
             return []
             
-        # Parseamos el bloque JSON capturado
-        json_data = json.loads(script_datos.string)
+        # Extraemos el contenido de texto puro del script
+        texto_json = script_datos.string.strip()
+        
+        # Cargamos el bloque de texto como un diccionario de Python
+        json_data = json.loads(texto_json)
         elementos_tienda = json_data.get("itemListElement", [])
         
         lista_portatiles = []
@@ -42,34 +47,39 @@ def extraer_portatiles(pagina):
             item = elemento.get("item", {})
             oferta = item.get("offers", {})
             
-            # Limpieza básica de texto para corregir encodings rotos (ej: 'PortÃ¡til' -> 'Portátil')
-            nombre_raw = item.get("name", "")
-            nombre_limpio = nombre_raw.encode('utf-8', errors='ignore').decode('utf-8', errors='ignore') if nombre_raw else "Portátil Genérico"
+            nombre = item.get("name", "")
+            marca = item.get("brand", {}).get("name", "Genérica")
+            sku = item.get("sku", "")
+            precio = float(oferta.get("price", 0.0))
+            url_prod = item.get("url", "")
             
-            marca_raw = item.get("brand", {}).get("name", "Genérica")
-            marca_limpia = marca_raw.encode('utf-8', errors='ignore').decode('utf-8', errors='ignore') if marca_raw else "Genérica"
+            # Limpieza final de strings para arreglar codificaciones extrañas de PcComponentes
+            if nombre:
+                nombre = nombre.encode('latin1', errors='ignore').decode('utf-8', errors='ignore') if 'Ã' in nombre else nombre
+            if brand := item.get("brand", {}).get("name"):
+                marca = brand.encode('latin1', errors='ignore').decode('utf-8', errors='ignore') if 'Ã' in brand else brand
 
             datos_finales = {
-                "nombre": nombre_limpio,
-                "marca": marca_limpia,
-                "sku": item.get("sku"),
-                "precio": float(oferta.get("price", 0.0)),
-                "url": item.get("url")
+                "nombre": nombre,
+                "marca": marca,
+                "sku": sku,
+                "precio": precio,
+                "url": url_prod
             }
             
-            # Solo guardamos si el producto tiene los datos esenciales correctos
             if datos_finales["nombre"] and datos_finales["precio"] > 0:
                 lista_portatiles.append(datos_finales)
-            
+                
         return lista_portatiles
 
     except Exception as e:
-        print(f" Error inesperado procesando la página {pagina}: {e}")
+        print(f" Error inesperado rascando la página {pagina}: {e}")
         return []
 
 if __name__ == "__main__":
-    # Test rápido de ejecución directa
+    # Test local para cantar victoria
     portatiles = extraer_portatiles(1)
-    print(f"\n ¡Éxito! Se han extraído {len(portatiles)} portátiles de la página 1.")
+    print(f"\n ¡EXTRACCIÓN COMPLETADA!")
+    print(f" Se han mapeado {len(portatiles)} portátiles reales directos de la estructura.")
     if portatiles:
-        print(f" -> Primer portátil mapeado: {portatiles[0]['nombre']} - {portatiles[0]['precio']}€")
+        print(f" -> Primer portátil detectado: {portatiles[0]['nombre']} - {portatiles[0]['precio']}€")
