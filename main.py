@@ -50,36 +50,60 @@ def ejecutar_pipeline():
     print("\n[1/3] Verificando estructura de tablas...")
     crear_tablas()
     
-    # PASO 2: Extracción (El nuevo scraper de JSON)
-    print("\n[2/3] Iniciando la extracción de portátiles...")
+    # PASO 2: Extracción con Cola de Reintentos
+    print("\n[2/3] Iniciando la extracción de portátiles con saltos aleatorios...")
     todos_los_productos = [] 
+    paginas_fallidas = [] # <-- Aquí guardaremos los 403
 
-    for pagina in range(1, 87):
-        #Para evitar DDOS
-        # 1. Descanso largo estratégico cada 3 páginas para engañar al firewall
-        if pagina > 1 and (pagina - 1) % 3 == 0:
-            descanso_largo = random.uniform(15.0, 25.0)
-            print(f"\n [Descanso] Tomando un descanso largo de {round(descanso_largo, 2)} segundos para camuflar el bot...")
-            time.sleep(descanso_largo)
+    paginas_totales = list(range(1, 88))
+    random.shuffle(paginas_totales)
 
-        # 2. Retardo normal aleatorio entre páginas
-        espera = random.uniform(4.0, 8.0) # Subimos el rango para ser más humanos
-        print(f" Esperando {round(espera, 2)} segundos para no saturar el servidor...")
-        time.sleep(espera)
+    # --- PRIMERA PASADA ---
+    for indice, pagina in enumerate(paginas_totales, start=1):
+        if indice > 1 and (indice - 1) % 3 == 0:
+            time.sleep(random.uniform(20.0, 35.0))
 
+        time.sleep(random.uniform(6.0, 12.0))
         productos_pagina = extraer_portatiles(pagina)
         
         if productos_pagina:
-            # .extend() añade los elementos de la lista directamente a nuestra bolsa principal
             todos_los_productos.extend(productos_pagina)
-            print(f"   -> Encontrados {len(productos_pagina)} portátiles en página {pagina}.")
+            print(f"    -> Encontrados {len(productos_pagina)} portátiles en página {pagina}.")
         else:
-            # Si una página viene vacía, probablemente hayamos llegado al final del catálogo antes de tiempo
-            print(f"   -> Fin del catálogo detectado o página vacía en la iteración {pagina}.")
-            break 
+            # [MODIFICADO] Si falla, la anotamos para luego
+            print(f"    -> [Cola] Página {pagina} guardada para reintento posterior.")
+            paginas_fallidas.append(pagina)
+
+    # --- BUCLE DE REINTENTOS ---
+    intentos_maximos = 2  # Para no quedarnos en un bucle infinito si nos banean del todo
+    intento_actual = 1
+
+    while paginas_fallidas and intento_actual <= intent_maximos:
+        print(f"\n🔄 [REINTENTOS] Iniciando ronda {intento_actual} de páginas fallidas...")
+        print(f"⏳ Esperando 60 segundos de reloj para enfriar la IP por completo...")
+        time.sleep(60) # Descanso profundo vital antes de volver a la carga
+        
+        # Volvemos a desordenar las que fallaron
+        random.shuffle(paginas_fallidas)
+        # Copiamos la lista para iterar y vaciamos la original para la siguiente ronda
+        paginas_a_reintentar = list(paginas_fallidas)
+        paginas_fallidas = []
+
+        for p_indice, pagina in enumerate(paginas_a_reintentar, start=1):
+            time.sleep(random.uniform(8.0, 15.0)) # En los reintentos vamos un pelín más despacio
             
-    print(f"\n Extracción completada. Total acumulado: {len(todos_los_productos)} portátiles.")
-    # PASO 3: Carga (Almacenamiento e historial de precios)
+            productos_pagina = extraer_portatiles(pagina)
+            if productos_pagina:
+                todos_los_productos.extend(productos_pagina)
+                print(f"    -> 🔥 ¡REINTENTO EXITOSO! Conseguida página {pagina} ({len(productos_pagina)} productos).")
+            else:
+                print(f"    -> ❌ Sigue dando 403 la página {pagina}.")
+                paginas_fallidas.append(pagina) # Se queda para la ronda 2 si queda margen
+                
+        intento_actual += 1
+
+    print(f"\n Extracción finalizada. Total acumulado en Supabase: {len(todos_los_productos)} portátiles.")
+   # PASO 3: Carga (Almacenamiento e historial de precios)
     print("\n[3/3] Guardando productos e histórico de precios en PostgreSQL...")
     guardar_datos(todos_los_productos)
     
