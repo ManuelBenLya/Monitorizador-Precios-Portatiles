@@ -54,7 +54,7 @@ def ejecutar_pipeline():
     print("\n[2/3] Iniciando la extracción de portátiles...")
     todos_los_productos = [] 
 
-    for pagina in range(1, 30):
+    for pagina in range(1, 87):
         #Para evitar DDOS
         espera = random.uniform(1.5, 3.5) # Elige un número aleatorio entre 1.5 y 3.5 segundos
         print(f" Esperando {round(espera, 2)} segundos para no saturar el servidor...")
