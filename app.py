@@ -193,7 +193,7 @@ with tab3:
     df_rebajados = df_descuentos[df_descuentos['descuento_euros'] > 0].sort_values('descuento_euros', ascending=False).head(10)
     
     if not df_rebajados.empty:
-        # Gráfica de barras horizontales
+        # 1. Pintamos el gráfico de barras limpio (sin la propiedad 'link' rota)
         fig_descuentos = px.bar(
             df_rebajados, x='descuento_euros', y='nombre', orientation='h', color='descuento_euros',
             title="Euros de Descuento respecto a su Máximo Histórico Registrado",
@@ -202,8 +202,30 @@ with tab3:
         )
         fig_descuentos.update_layout(yaxis={'categoryorder': 'total ascending'})
         st.plotly_chart(fig_descuentos, width='stretch')
+        
+        st.markdown("---")
+        # 2. 🚀 El truco interactivo: Un Selector de Chollos Directo
+        st.subheader("🛒 Enlace Directo a los Chollos del Gráfico")
+        st.markdown("Selecciona uno de los portátiles con descuento para abrir su ficha original:")
+        
+        # Creamos un selector rápido con los nombres del Top 10
+        opciones_chollos = df_rebajados['nombre'].unique()
+        chollo_seleccionado = st.selectbox("Elige el modelo que te interesa:", opciones_chollos)
+        
+        # Buscamos los datos exactos (precio, descuento y URL) del modelo que ha pinchado el usuario
+        datos_chollo = df_rebajados[df_rebajados['nombre'] == chollo_seleccionado].iloc[0]
+        
+        # Pintamos un botón interactivo súper llamativo que redirige al usuario
+        col_c1, col_c2 = st.columns([2, 1])
+        with col_c1:
+            st.info(f"✨ **{chollo_seleccionado}**\n\n💰 Precio actual: **{datos_chollo['precio']} €** (¡Has ahorrado **{round(datos_chollo['descuento_euros'], 2)} €** respecto a su precio más alto!)")
+        with col_c2:
+            st.markdown("<br>", unsafe_allow_html=True) 
+            st.link_button("🔥 Ir a por el Chollo en PcComponentes ↗️", datos_chollo['url'], use_container_width=True)
+            
     else:
         st.info("📉 No se han registrado variaciones de bajada de precio todavía. El bot necesita acumular más pasadas semanales para contrastar ofertas.")
+
 
 # ==========================================
 # 6. COMPONENTE INTERACTIVO DE DATOS CRUDOS
