@@ -2,81 +2,228 @@ import streamlit as st
 import pandas as pd
 import plotly.express as px
 from src.database import obtener_datos_dashboard
-from dotenv import load_dotenv  # 👈 Dejas esto para que lea tu archivo .env
+from dotenv import load_dotenv 
 
+# Carga forzada de variables de entorno (Local)
 load_dotenv()
 
-# Configuración de la página web
-st.set_page_config(page_title="Radar de Precios - PcComponentes", page_icon="💻", layout="wide")
+# Configuración avanzada de la página web (Sintaxis moderna de 2026)
+st.set_page_config(
+    page_title="Radar de Precios - PcComponentes", 
+    page_icon="💻", 
+    layout="wide"
+)
 
-st.title(" 💻 Radar de Precios de Portátiles")
-st.markdown("Dashboard de ingeniería de datos para el seguimiento de precios en tiempo real.")
+st.title(" Dashboard de Precios de Portátiles")
+st.markdown("Dashboard de ingeniería de datos de alto rendimiento para el seguimiento y monitorización del mercado en tiempo real.")
 
-# 1. Extracción de datos desde PostgreSQL
+# ==========================================
+# 1. EXTRACCIÓN Y PREPARACIÓN DE DATOS
+# ==========================================
 try:
-    # 🏁 Intento A: Intentamos conectarnos a tu Supabase real
-    df = obtener_datos_dashboard() 
+    # 🏁 Intento A: Conexión nativa a Supabase
+    df_crudo = obtener_datos_dashboard() 
     
-    if df.empty:
+    if df_crudo.empty:
         st.warning("⚠️ Conectado a Supabase, pero las tablas no devuelven registros. ¿Corriste el scraper?")
 except Exception as e:
-    # 🕵️‍♂️ Si falla el Intento A, te chiva el error en la barra lateral para que sepas qué pasa...
-    st.sidebar.error(f"❌ Error de conexión a Supabase: {e}")
-    st.sidebar.warning("🔄 Cargando entorno de demostración con datos locales.")
+    # 🛡️ Plan B: Datos simulados de contingencia (Fallback) por si falla la red
+    st.sidebar.error(f"❌ Error de conexión a la BD: {e}")
+    st.sidebar.warning("🔄 Cargando entorno de demostración con datos locales simulados.")
     
-    #  Plan B: Datos de prueba por si falla la nube
-    df = pd.DataFrame({
-        'sku': ['101', '101', '102', '102'],
-        'nombre': ['MSI Cyborg 15', 'MSI Cyborg 15', 'ASUS Vivobook', 'ASUS Vivobook'],
-        'marca': ['MSI', 'MSI', 'Asus', 'Asus'],
-        'precio': [1099.00, 1049.00, 449.00, 429.00],
-        'fecha_extraccion': pd.to_datetime(['2026-05-13', '2026-05-15', '2026-05-13', '2026-05-15'])
+    df_crudo = pd.DataFrame({
+        'sku': ['101', '101', '102', '102', '103', '104', '105'],
+        'nombre': [
+            'MSI Cyborg 15 A12V', 'MSI Cyborg 15 A12V', 
+            'ASUS Vivobook Go 15', 'ASUS Vivobook Go 15',
+            'Lenovo IdeaPad Slim 3', 'HP Laptop 15-fc', 'Acer Aspire 3'
+        ],
+        'marca': ['MSI', 'MSI', 'Asus', 'Asus', 'Lenovo', 'HP', 'Acer'],
+        'precio': [1099.00, 1049.00, 449.00, 429.00, 520.00, 610.00, 399.00],
+        'url': [
+            'https://www.pccomponentes.com', 'https://www.pccomponentes.com',
+            'https://www.pccomponentes.com', 'https://www.pccomponentes.com',
+            'https://www.pccomponentes.com', 'https://www.pccomponentes.com',
+            'https://www.pccomponentes.com'
+        ],
+        'fecha_extraccion': pd.to_datetime([
+            '2026-05-13 10:00:00', '2026-05-16 09:00:00', 
+            '2026-05-13 10:00:00', '2026-05-16 09:00:00',
+            '2026-05-16 09:00:00', '2026-05-16 09:00:00', '2026-05-16 09:00:00'
+        ])
     })
 
-# 2. Barra Lateral (Filtros)
-st.sidebar.header("Filtros del Mercado")
-marcas_disponibles = df['marca'].unique()
-marcas_seleccionadas = st.sidebar.multiselect("Selecciona Marcas:", options=marcas_disponibles, default=marcas_disponibles)
+# ==========================================
+# 2. LOGICA ANALÍTICA DE PRECIOS RECIENTES
+# ==========================================
+# Para KPIs, Boxplots y la Tabla final, nos quedamos estrictamente con el ULTIMO precio de cada SKU
+df_ultimo = df_crudo.sort_values('fecha_extraccion').groupby('sku').last().reset_index()
 
-# Filtrar el DataFrame según la selección del usuario
-df_filtrado = df[df['marca'].isin(marcas_seleccionadas)]
+# ==========================================
+# 3. BARRA LATERAL (FILTROS DE INFRAESTRUCTURA)
+# ==========================================
+st.sidebar.header("🎯 Filtros del Mercado")
 
-# 3. Métricas Clave (KPIs)
+# Filtro A: Selección de Fabricantes
+marcas_disponibles = sorted(df_ultimo['marca'].unique())
+marcas_seleccionadas = st.sidebar.multiselect(
+    "Selecciona Marcas:", 
+    options=marcas_disponibles, 
+    default=marcas_disponibles
+)
+
+# Filtro B: Deslizador dinámico de Presupuesto
+precio_min_posible = float(df_ultimo['precio'].min())
+precio_max_posible = float(df_ultimo['precio'].max())
+
+# Validación por si el dataset de pruebas es muy pequeño y los precios coinciden
+if precio_min_posible == precio_max_posible:
+    precio_min_posible -= 10.0
+    precio_max_posible += 10.0
+
+rango_precio = st.sidebar.slider(
+    "Ajusta tu presupuesto (€):",
+    min_value=int(precio_min_posible),
+    max_value=int(precio_max_posible),
+    value=(int(precio_min_posible), int(precio_max_posible))
+)
+
+# Aplicamos los filtros encadenados al Dataset del catálogo actual
+df_filtrado_ultimo = df_ultimo[
+    (df_ultimo['marca'].isin(marcas_seleccionadas)) & 
+    (df_ultimo['precio'] >= rango_precio[0]) & 
+    (df_ultimo['precio'] <= rango_precio[1])
+]
+
+# ==========================================
+# 4. COMPONENTE METRICO (KPIS SUPERIORES)
+# ==========================================
 col1, col2, col3 = st.columns(3)
 with col1:
-    st.metric("Total Portátiles Trackeados", len(df_filtrado['sku'].unique()))
+    st.metric("Total Modelos Únicos", len(df_filtrado_ultimo['sku'].unique()))
 with col2:
-    st.metric("Precio Medio", f"{round(df_filtrado['precio'].mean(), 2)} €")
+    precio_medio = df_filtrado_ultimo['precio'].mean() if not df_filtrado_ultimo.empty else 0
+    st.metric("Precio Medio Catálogo", f"{round(precio_medio, 2)} €")
 with col3:
-    # Mostramos la última fecha disponible en el dataset para saber de cuándo son los datos
-    if not df_filtrado.empty:
-        ultima_fecha = df_filtrado['fecha_extraccion'].max().strftime('%d/%m/%Y')
-        st.metric("Última Actualización", ultima_fecha)
+    if not df_filtrado_ultimo.empty:
+        ultima_fecha = df_filtrado_ultimo['fecha_extraccion'].max().strftime('%d/%m/%Y %H:%M')
+        st.metric("Sincronización Cloud (UTC)", ultima_fecha)
     else:
-        st.metric("Última Actualización", "Sin datos")
+        st.metric("Sincronización Cloud", "Sin registros")
 
 st.markdown("---")
 
-# 4. Gráficos Interactivos
-col_graf1, col_graf2 = st.columns(2)
+# ==========================================
+# 5. ESTRUCTURA INTERFICIAL DE PESTAÑAS (TABS)
+# ==========================================
+tab1, tab2, tab3 = st.tabs([
+    "📊 Estructura y Cuotas del Mercado", 
+    "📈 Historial Cronológico e Índices", 
+    "🔥 Detector de Chollos y Bajadas"
+])
 
-with col_graf1:
-    st.subheader("Distribución de Precios por Marca")
-    fig_box = px.box(df_filtrado, x="marca", y="precio", color="marca", points="all",
-                     title="Rango de Precios por Fabricante")
-    st.plotly_chart(fig_box, use_container_width=True)
-
-with col_graf2:
-    st.subheader("Evolución Temporal de Precios")
-    portatil_elegido = st.selectbox("Elige un modelo para ver su histórico:", df_filtrado['nombre'].unique())
-    df_temporal = df_filtrado[df_filtrado['nombre'] == portatil_elegido]
+# ------------------------------------------
+# PESTAÑA 1: ANALISIS GLOBAL DE MERCADO
+# ------------------------------------------
+with tab1:
+    col_g1, col_g2 = st.columns(2)
     
-    fig_line = px.line(df_temporal, x="fecha_extraccion", y="precio", markers=True,
-                       title=f"Historial de: {portatil_elegido}")
-    st.plotly_chart(fig_line, use_container_width=True)
+    with col_g1:
+        st.subheader("Distribución de Costes por Fabricante")
+        fig_box = px.box(
+            df_filtrado_ultimo, x="marca", y="precio", color="marca", points="all",
+            title="Dispersión y Rangos de Precios de Portátiles",
+            labels={"marca": "Fabricante", "precio": "Precio (€)"}
+        )
+        fig_box.update_layout(legend_title_text="Marcas")
+        st.plotly_chart(fig_box, width='stretch')
+        
+    with col_g2:
+        st.subheader("Cuota de Modelos Expuestos (Stock Share)")
+        # Agrupamos para sacar el porcentaje de presencia de cada marca en el catálogo actual
+        df_share = df_filtrado_ultimo['marca'].value_counts().reset_index()
+        df_share.columns = ['marca', 'cantidad']
+        
+        fig_pie = px.pie(
+            df_share, values='cantidad', names='marca', hole=0.4,
+            title="Porcentaje de Variedad de Catálogo por Fabricante"
+        )
+        st.plotly_chart(fig_pie, width='stretch')
 
+# ------------------------------------------
+# PESTAÑA 2: CRONOLOGÍA TEMPORAL POR PRODUCTO
+# ------------------------------------------
+with tab2:
+    st.subheader("Evolución Temporal de Precios de un Modelo")
+    
+    # Permitimos elegir solo entre los nombres que pasan los filtros actuales de marca/precio
+    nombres_disponibles = df_filtrado_ultimo['nombre'].unique()
+    
+    if len(nombres_disponibles) > 0:
+        portatil_elegido = st.selectbox("Busca o selecciona un portátil para ver su evolución:", nombres_disponibles)
+        
+        # Para la gráfica cronológica cruzamos el nombre elegido con todo el histórico crudo completo
+        df_temporal = df_crudo[df_crudo['nombre'] == portatil_elegido].sort_values('fecha_extraccion')
+        
+        fig_line = px.line(
+            df_temporal, x="fecha_extraccion", y="precio", markers=True,
+            title=f"Historial de Precios de: {portatil_elegido}",
+            labels={"fecha_extraccion": "Fecha del Análisis", "precio": "Precio en Tienda (€)"}
+        )
+        st.plotly_chart(fig_line, width='stretch')
+    else:
+        st.info("💡 Mueve los filtros de la barra lateral para ver portátiles disponibles.")
+
+# ------------------------------------------
+# PESTAÑA 3: ALGORITMO DETECTOR DE REBAJAS
+# ------------------------------------------
+with tab3:
+    st.subheader("🔥 Top 10 Mayores Descuentos Detectados")
+    st.markdown("El sistema analiza de forma automatizada la diferencia entre el coste histórico máximo y el coste actual de cada SKU.")
+    
+    # 🧠 Lógica inteligente de cálculo de descuentos analizando el histórico crudo entero
+    df_max_precios = df_crudo.groupby('sku')['precio'].max().reset_index()
+    df_max_precios.columns = ['sku', 'precio_max_historico']
+    
+    # Fusionamos el precio máximo con los datos de los modelos filtrados actuales
+    df_descuentos = pd.merge(df_filtrado_ultimo, df_max_precios, on='sku')
+    df_descuentos['descuento_euros'] = df_descuentos['precio_max_historico'] - df_descuentos['precio']
+    
+    # Filtramos para quedarnos solo con aquellos que de verdad han bajado de precio (> 0 euros)
+    df_rebajados = df_descuentos[df_descuentos['descuento_euros'] > 0].sort_values('descuento_euros', ascending=False).head(10)
+    
+    if not df_rebajados.empty:
+        # Gráfica de barras horizontales
+        fig_descuentos = px.bar(
+            df_rebajados, x='descuento_euros', y='nombre', orientation='h', color='descuento_euros',
+            title="Euros de Descuento respecto a su Máximo Histórico Registrado",
+            labels={'descuento_euros': 'Descuento Directo (€)', 'nombre': 'Modelo'},
+            color_continuous_scale='oranges'
+        )
+        fig_descuentos.update_layout(yaxis={'categoryorder': 'total ascending'})
+        st.plotly_chart(fig_descuentos, width='stretch')
+    else:
+        st.info("📉 No se han registrado variaciones de bajada de precio todavía. El bot necesita acumular más pasadas semanales para contrastar ofertas.")
+
+# ==========================================
+# 6. COMPONENTE INTERACTIVO DE DATOS CRUDOS
+# ==========================================
 st.markdown("---")
+st.subheader("📋 Inventario de Datos en Tiempo Real")
+st.markdown("Filtra, ordena y busca portátiles de forma dinámica. Haz clic en 'Ir a PcComponentes' para abrir la ficha original del producto.")
 
-# 5. Vista de los Datos Crudos
-st.subheader(" 📋 Inventario de Datos en Tiempo Real")
-st.dataframe(df_filtrado, use_container_width=True)
+# Columnas limpias ordenadas que mostraremos al usuario
+columnas_vista = ['sku', 'nombre', 'marca', 'precio', 'fecha_extraccion', 'url']
+
+# Renderizado avanzado de la tabla de datos con enlaces web operativos (LinkColumn)
+st.dataframe(
+    df_filtrado_ultimo[columnas_vista],
+    column_config={
+        "url": st.column_config.LinkColumn("Enlace de Compra", display_text="Ir a PcComponentes ↗️"),
+        "precio": st.column_config.NumberColumn("Precio Actual", format="%.2f €"),
+        "sku": st.column_config.TextColumn("Código SKU"),
+        "fecha_extraccion": st.column_config.DatetimeColumn("Última Captura", format="DD/MM/YYYY HH:mm")
+    },
+    hide_index=True,
+    width='stretch'
+)
